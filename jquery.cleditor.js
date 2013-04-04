@@ -46,13 +46,14 @@
                     [["Paragraph", "<p>"], ["Header 1", "<h1>"], ["Header 2", "<h2>"],
                     ["Header 3", "<h3>"],  ["Header 4","<h4>"],  ["Header 5","<h5>"],
                     ["Header 6","<h6>"]],
-      useCSS:       false, // use CSS to style HTML when possible (not supported in ie)
+      useCSS:       true, // use CSS to style HTML when possible (not supported in ie)
       docType:      // Document type contained within the editor
                     '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">',
       docCSSFile:   // CSS file used to style the document contained within the editor
                     "", 
       bodyStyle:    // style to assign to document body contained within the editor
-                    "margin:4px; font:10pt Arial,Verdana; cursor:text"
+                    "margin:4px; font:10pt Arial,Verdana; cursor:text",
+      hotKeys:      {'ctrl+b meta+b': 'bold'}
     },
 
     // Define all usable toolbar buttons - the init string property is 
@@ -95,7 +96,6 @@
       "print,,|" +
       "source,Show Source"
     },
-
     // imagesPath - returns the path to the images folder
     imagesPath: function() { return imagesPath(); }
 
@@ -153,11 +153,13 @@
   MSG_CLASS        = "cleditorMsg",     // message popup div inside body
 
   // Test for ie
-  ie = $.browser.msie,
+  ie = $('body').hasClass('ie'),
+  firefox = $('body').hasClass('gecko'),
+  webkit = $('body').hasClass('webkit'),
   ie6 = /msie\s6/i.test(navigator.userAgent),
 
   // Test for iPhone/iTouch/iPad
-  iOS = /iphone|ipad|ipod/i.test(navigator.userAgent),
+  iOS = false, //$('body').hasClass('ios'),
 
   // Popups are created once as needed and shared by all editor instances
   popups = {},
@@ -195,7 +197,7 @@
   cleditor = function(area, options) {
 
     var editor = this;
-
+    window.editor = editor;
     // Get the defaults and override with options
     editor.options = options = $.extend({}, $.cleditor.defaultOptions, options);
 
@@ -257,8 +259,7 @@
           .bind(CLICK, $.proxy(buttonClick, editor))
           .appendTo($group)
           .hover(hoverEnter, hoverLeave);
-
-        // Prepare the button image
+        
         var map = {};
         if (button.css) map = button.css;
         else if (button.image) map.backgroundImage = imageUrl(button.image);
@@ -792,6 +793,18 @@
     return "url(" + imagesPath() + filename + ")";
   }
 
+  function bindHotkeys (editor){
+    $.each(editor.options.hotKeys, function (hotkey, command){      
+      $(editor.doc).keydown(hotkey, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        editor.doc.execCommand(command, 0);
+      }).keyup(hotkey, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+  }
   // refresh - creates the iframe and resizes the controls
   function refresh(editor) {
 
@@ -829,6 +842,7 @@
     // Load the content
     updateFrame(editor);
 
+    bindHotkeys(editor);
     // Bind the ie specific iframe event handlers
     if (ie) {
 
@@ -869,7 +883,7 @@
     }
 
     // Update the textarea when the iframe loses focus
-    ($.browser.mozilla ? $doc : $(contentWindow)).blur(function() {
+    (firefox ? $doc : $(contentWindow)).blur(function() {
       updateTextArea(editor, true);
     });
 
@@ -917,7 +931,7 @@
   function refreshButtons(editor) {
 
     // Webkit requires focus before queryCommandEnabled will return anything but false
-    if (!iOS && $.browser.webkit && !editor.focused) {
+    if (!iOS && webkit && !editor.focused) {
       editor.$frame[0].contentWindow.focus();
       window.focus();
       editor.focused = true;
@@ -953,9 +967,6 @@
         if (enabled === undefined)
           enabled = true;
       }
-      else if (((inSourceMode || iOS) && button.name != "source") ||
-      (ie && (command == "undo" || command == "redo")))
-        enabled = false;
       else if (command && command != "print") {
         if (ie && command == "hilitecolor")
           command = "backcolor";
@@ -965,7 +976,6 @@
           catch (err) {enabled = false;}
         }
       }
-
       // Enable or disable the button
       if (enabled) {
         $elem.removeClass(DISABLED_CLASS);
